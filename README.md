@@ -89,8 +89,23 @@ Ollama 返回 `done_reason: "unload"` 即代表模型已从显存卸载。
 
 ## 依赖
 
-- DeepSeek Harness `v0.1.0-rc.6`（开发者预览版）
-- 本地 Ollama（可选，没有 Ollama 时按钮仍会显示，但执行时提示无可用服务）
+- DeepSeek Harness `0.2.0-rc.2`（peer 已对齐 `^0.2.0-rc.2`，不再支持 0.1.x）
+- llama-swap 在 `127.0.0.1:11435`（可选：没在跑时按钮照常显示，点了只清扫孤儿引擎并给出提示）
+- host 端只用 Node 内置 `node:child_process` / `node:http`，没有任何运行时 npm 依赖；不再引用 0.1.x 时代的 `@dsh-plugin/dsh-loader` 与 `@deepseek-ai/dsh-client-runtime`
+
+## 安装（本仓库维护版）
+
+```bash
+# 直接装 GitHub 版（公开仓库，无需 token）
+dsh plugin --profile web add github:fataldeity-lab/dsh-gpu-cleanup
+
+# 或装本地源码目录
+dsh plugin --profile web add I:/DPHs/dsh-gpu-cleanup
+```
+
+装完**重启一次 dsh web**：bundle 层只在宿主启动时挂载。起来后右上角（Session log 按钮旁）出现「释放显存」，插件详情页也有同一个大按钮。
+
+原项目：[princepainter/dsh-gpu-cleanup](https://github.com/princepainter/dsh-gpu-cleanup)（MIT）。
 
 ## License
 
