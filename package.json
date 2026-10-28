@@ -1,7 +1,7 @@
 {
   "name": "@princepainter/dsh-gpu-cleanup",
   "description": "DeepSeek Harness (DSH) Web UI plugin: one click inside the plugin (settings card or the conversation-header button) unloads every llama-swap model and sweeps stale local engines, freeing VRAM while llama-swap itself keeps running.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
@@ -31,10 +31,10 @@
     "deepseek-harness",
     "dsh",
     "dsh-plugin",
-    "ollama",
+    "llama-swap",
     "gpu",
     "vram",
-    "comfyui",
+    "llama.cpp",
     "cuda"
   ],
   "dsh": {
@@ -44,7 +44,6 @@
     "client": {
       "platform": "web",
       "inject": [
-        "@deepseek-ai/dsh-client-locale",
         "@deepseek-ai/dsh-client-ui-slots",
         "@deepseek-ai/dsh-client-ui-primitives"
       ]
@@ -53,7 +52,6 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
     "react": "^18.2.0",
-    "@deepseek-ai/dsh-client-locale": "^0.2.0-rc.2",
     "@deepseek-ai/dsh-client-ui-slots": "^0.2.0-rc.2",
     "@deepseek-ai/dsh-client-ui-primitives": "^0.2.0-rc.2"
   }

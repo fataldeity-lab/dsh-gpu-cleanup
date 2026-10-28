@@ -1,0 +1,109 @@
+// Node-side (host) half of the dsh-gpu-cleanup package.
+//
+// Responsibilities:
+//   1. Keep the package importable from Node (the Cordis loader requires it).
+//   2. Provide a `gpuCleanupHost` service (RPC channel) AND a plain local HTTP
+//      endpoint (http://127.0.0.1:11436/kill-llama) the browser half can call
+//      as a FALLBACK when the llama.cpp proxy (qwen-switch, port 11435) is dead
+//      or unreachable: at that point the browser cannot reach any __unload
+//      endpoint, so the host process force-kills every llama-server.exe via
+//      taskkill (by image name, so orphaned instances are covered too) and
+//      confirms they are actually gone before returning.
+//
+// The HTTP endpoint is deliberately a fixed, well-known local port next to the
+// proxy (11435): the browser half needs zero RPC plumbing to reach it.
+import { execFile } from "node:child_process";
+import { createServer } from "node:http";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
+const KILL_PORT = 11436;
+const name = "gpu-cleanup";
+const inject = [];
+
+// Parse `tasklist /FI "IMAGENAME eq llama-server.exe" /FO CSV /NH` output and
+// return the PIDs. A missing/empty result is an empty array, never a throw.
+async function listLlamaServers() {
+	try {
+		const { stdout } = await execFileAsync("tasklist", ["/FI", "IMAGENAME eq llama-server.exe", "/FO", "CSV", "/NH"], { windowsHide: true });
+		const pids = [];
+		for (const line of stdout.split(/\r?\n/)) {
+			const m = line.match(/"llama-server\.exe","(\d+)"/);
+			if (m) pids.push(Number(m[1]));
+		}
+		return pids;
+	} catch (e) {
+		return [];
+	}
+}
+
+// Force-kill every llama-server.exe by image name (covers instances spawned by
+// the proxy as well as orphaned ones), then poll until they are gone (up to
+// ~8s) so VRAM is actually reclaimed before we report success.
+async function killLlamaServers() {
+	const before = await listLlamaServers();
+	if (before.length === 0) return { killed: 0, remaining: [] };
+	try {
+		await execFileAsync("taskkill", ["/f", "/im", "llama-server.exe"], { windowsHide: true });
+	} catch (e) {
+		// process may already be gone — poll confirms
+	}
+	let remaining = await listLlamaServers();
+	const deadline = Date.now() + 8000;
+	while (remaining.length > 0 && Date.now() < deadline) {
+		await new Promise((resolve) => setTimeout(resolve, 500));
+		remaining = await listLlamaServers();
+	}
+	return { killed: before.length, remaining };
+}
+
+function json(res, status, body) {
+	res.writeHead(status, {
+		"Content-Type": "application/json; charset=utf-8",
+		"Access-Control-Allow-Origin": "*",
+		"Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+		"Access-Control-Allow-Headers": "Content-Type"
+	});
+	res.end(JSON.stringify(body));
+}
+
+// Single shared HTTP server across apply() re-invocations (bundle reloads).
+let serverRef = null;
+
+function ensureServer() {
+	if (serverRef && serverRef.listening) return serverRef;
+	const server = createServer(async (req, res) => {
+		if (req.method === "OPTIONS") { json(res, 204, {}); return; }
+		if (req.method === "POST" && req.url === "/kill-llama") {
+			try {
+				const r = await killLlamaServers();
+				json(res, 200, { ok: true, killed: r.killed, remaining: r.remaining });
+			} catch (e) {
+				json(res, 500, { ok: false, message: String((e && e.message) || e) });
+			}
+			return;
+		}
+		if (req.method === "GET" && req.url === "/health") {
+			json(res, 200, { ok: true });
+			return;
+		}
+		json(res, 404, { ok: false, message: "not found" });
+	});
+	server.on("error", (e) => { console.error("[gpu-cleanup] kill server:", e && e.message); });
+	server.listen(KILL_PORT, "127.0.0.1", () => {
+		console.log("[gpu-cleanup] kill server on http://127.0.0.1:" + KILL_PORT);
+	});
+	serverRef = server;
+	return server;
+}
+
+function apply(ctx) {
+	ensureServer();
+	ctx.provide("gpuCleanupHost", {
+		killPort: KILL_PORT,
+		listLlamaServers,
+		killLlamaServers
+	});
+}
+
+export { apply, inject, name };
