@@ -1,7 +1,7 @@
 {
   "name": "@princepainter/dsh-gpu-cleanup",
-  "description": "DeepSeek Harness (DSH) Web UI plugin: adds a 'Release GPU' button to the conversation header that unloads local Ollama / OpenAI-compatible models on demand, freeing VRAM for ComfyUI, SDXL and other GPU workloads.",
-  "version": "0.1.0",
+  "description": "DeepSeek Harness (DSH) Web UI plugin: one click inside the plugin (settings card or the conversation-header button) unloads every llama-swap model and sweeps stale local engines, freeing VRAM while llama-swap itself keeps running.",
+  "version": "0.2.0",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
@@ -18,12 +18,14 @@
       "types": "./lib/invariant.js",
       "default": "./lib/invariant.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
   },
   "files": [
     "lib/client.js",
     "lib/index.js",
-    "lib/invariant.js"
+    "lib/invariant.js",
+    "cordis.patch.yml"
   ],
   "keywords": [
     "deepseek-harness",
@@ -36,10 +38,12 @@
     "cuda"
   ],
   "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "platform": "web",
       "inject": [
-        "@deepseek-ai/dsh-client-runtime",
         "@deepseek-ai/dsh-client-locale",
         "@deepseek-ai/dsh-client-ui-slots",
         "@deepseek-ai/dsh-client-ui-primitives"
@@ -49,9 +53,8 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
     "react": "^18.2.0",
-    "@deepseek-ai/dsh-client-runtime": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-locale": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-ui-slots": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-ui-primitives": "^0.1.0-rc.6"
+    "@deepseek-ai/dsh-client-locale": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-primitives": "^0.2.0-rc.2"
   }
 }

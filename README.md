@@ -1,19 +1,30 @@
 # dsh-gpu-cleanup
 
-一个 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）Web UI 插件：在对话页右上角（Session log 按钮旁）添加一个 **「释放显存」** 按钮，一键卸载本地 Ollama（及任意 OpenAI 兼容服务）已加载的模型，把 GPU 显存腾出来给 ComfyUI / SDXL / 其他 GPU 任务使用。
+一个 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）Web UI 插件：**在插件里点一下**就把本地模型占着的 GPU 显存腾出来，同时**保留 llama-swap 本身运行**（它是模型调度器，不该跟着一起关）。
 
-> 典型场景：用 DSH 跑完一个本地模型任务后，模型仍驻留在显存里，直接去开 ComfyUI 会 OOM。点一下按钮即可卸载，无需重启 DSH。
+两个入口，都是「一次点击、没有二次确认」：
 
-A DeepSeek Harness Web UI plugin that adds a **"Release GPU"** button next to the Session log button, unloading local Ollama (and any OpenAI-compatible) models on demand to free VRAM for ComfyUI / SDXL and other GPU workloads.
-<img width="1585" height="915" alt="image" src="https://github.com/user-attachments/assets/e7592c4c-4fae-4ad6-bbf0-959c30fe8590" />
+1. **设置 → 插件配置 → dsh-gpu-cleanup**：一个大按钮「一键释放显存」；
+2. **对话页右上角**（Session log 按钮旁）的「释放显存」小按钮。
 
-## 功能特性
+点下去发生的事：
 
-- **一键释放显存**：自动发现本地 LLM 服务，卸载所有已加载模型
-- **自动发现**：从 DSH 的 `settings.yaml` 读取 provider 配置，自动识别 Ollama 端点（含 `:11434` 端口或名字含 `ollama`）
-- **兜底机制**：即使配置里没有 Ollama，也会尝试 `http://127.0.0.1:11434`
-- **实时日志**：弹窗展示卸载进度，支持复制日志
-- **中英双语**：跟随 DSH 的 UI 语言自动切换
+- 调 llama-swap `POST /api/models/unload` 卸载所有已加载模型（保持 llama-swap 存活）；
+- 扫掉残留的 `llama-server` / `ninfer-serve` / `strata` 引擎进程，但**只杀启动超过 90 秒的**——刚起来的那个很可能正在给你生成回复，杀了会断掉当前回答；
+- 复查 11435 仍在线，并把「还剩哪些引擎」写进日志。
+
+浏览器不能直接调 llama-swap（跨端口、对方不发 CORS 头），所以真正的活都在 DSH 宿主进程里做，浏览器只调本机控制服务 `http://127.0.0.1:11436`：
+
+| 端点 | 作用 |
+| --- | --- |
+| `GET /status` | 当前有哪些引擎、llama-swap 是否在线、哪些模型已加载 |
+| `POST /free-vram` | 卸载 + 清扫 + 复查，返回逐步日志（按钮就调这个） |
+| `GET /list-llama` | 只读列出引擎 PID（旧版兼容） |
+| `POST /kill-llama` | 强制杀掉全部引擎（旧版兼容，不保留新引擎） |
+
+One click inside the plugin (settings card, or the header button) unloads every llama-swap model and sweeps stale local engines, freeing VRAM while llama-swap itself keeps running. All work happens in the DSH host process; the browser only calls the local control server on `127.0.0.1:11436`.
+
+> 装完/改完必须重启一次 DSH Web 宿主：`bundles` 列表是启动时读的，刷新页面不会加载新插件。
 
 ## 安装
 
@@ -31,13 +42,11 @@ cd ~/.dsh/profiles/node_modules/@princepainter
 git clone https://github.com/princepainter/dsh-gpu-cleanup.git
 ```
 
-然后在 `~/.dsh/profiles/web/cordis.patch.yml` 里注册插件：
-
-```yaml
-- insert:
-    - id: gpu-cleanup
-      name: '@princepainter/dsh-gpu-cleanup'
-```
+> 本包已在 package.json 声明 `dsh.bundle.patch`（`cordis.patch.yml` 自动装配层），
+> 所以 `dsh plugin add` 会把插件作为 profile bundle 激活，**无需**再手动往
+> `~/.dsh/profiles/web/cordis.patch.yml` 里 `insert`（手动 insert 会和 bundle 层重复挂载）。
+> 若手动列进 `~/.dsh/profiles/web/package.json` 的 `dsh.profile.bundles`，
+> boot 会校验 `dsh.bundle.patch`，现在已满足，不会再启动报错。
 
 ### 重启并刷新
 

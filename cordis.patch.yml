@@ -1,0 +1,8 @@
+# dsh-gpu-cleanup bundle patch: mounts the plugin into a profile layer stack.
+# Two halves: lib/index.js runs in the DSH host process (owns the llama-swap
+# calls + the local control server on 127.0.0.1:11436); lib/client.js is the
+# browser half (header button + settings card). This layer makes both load on
+# boot when the package is listed in dsh.profile.bundles.
+- insert:
+    - id: gpu-cleanup
+      name: '@princepainter/dsh-gpu-cleanup'
